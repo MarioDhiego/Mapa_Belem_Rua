@@ -1,15 +1,17 @@
 
-
+#------------------------------------------------------------------------------#
 # Pacotes para Ler Shapefile
 library(sf)
 library(ggplot2)
 library(leaflet)
 library(leaflet.extras)
 library(dplyr)
+#------------------------------------------------------------------------------#
 
+
+#------------------------------------------------------------------------------#
 #Limpa a Area de Trabalho
 rm(list = ls()) 
-
 
 # Definir o Diretorio de Trabalho
 setwd("C:/Users/usuario/Documents/Shapefile_Belém_2022")
@@ -18,84 +20,136 @@ setwd("C:/Users/usuario/Documents/Shapefile_Belém_2022")
 Belem_shape <- st_read('Belem_1501402_faces_de_logradouros_2022.shp',
                        options = "ENCODING=UTF-8")
 
-~
-  
-# Definir um limiar para os maiores valores (80º percentil)
-limiar <- quantile(Belem_shape$TOT_GERAL, 0.80, na.rm = TRUE)
+# Calcular o centróide de cada polígono
+belem_centroids <- st_centroid(Belem_shape)
 
-# Filtrar apenas as regiões com valores acima do limiar
-Belem_top <- Belem_shape %>% filter(TOT_GERAL >= limiar)
+# Extrair coordenadas
+coords <- st_coordinates(belem_centroids)
 
-# Verificar os valores filtrados
-summary(Belem_top$TOT_GERAL)
+# Selecione a variável de interesse (aqui usamos uma de exemplo)
+# Substitua 'NOME_DA_VARIAVEL' por uma variável que represente a intensidade (ex: população, ocorrências, etc.)
+# Veja as colunas com: names(belem_shape)
 
-
-
-
-head(Belem_shape)
+# Exemplo com uma variável genérica:
+belem_centroids$TOT_RES <- 2 # Substitua por uma coluna real se desejar
 
 
-ggplot(data = Belem_shape) +
-  geom_sf(fill = "white", color = "black") +
-  theme_minimal() +
-  ggtitle("Mapa de Belém - Faces de Logradouros")
+#------------------------------------------------------------------------------#
+# Mapa Belem - Rua
+# Paleta de cores: mais escuro = valor maior
+pal <- colorQuantile(
+  palette = "YlOrRd",
+  domain = Belem_shape$TOT_GERAL,
+  n = 6,  # número de faixas
+  na.color = "transparent"
+)
 
-ggplot(data = Belem_shape) +
-  geom_sf(aes(fill = TOT_GERAL), color = "black") +
-  scale_fill_viridis_c(option = "magma", na.value = "grey80") +  # Melhorando as cores
-  theme_minimal() +
-  ggtitle("Mapa de Belém - TOT_GERAL por Região")
-
-
-
-
-ggplot(Belem_shape) +
-  geom_sf(aes(fill = TOT_GERAL), color = "black") +
-  scale_fill_gradient(low = "yellow", high = "red", na.value = "grey80") +
-  theme_minimal() +
-  ggtitle("Mapa de Calor - TOT_GERAL em Belém")
-
-
+# Mapa com ruas coloridas
 leaflet(Belem_shape) %>%
-  addTiles() %>%
-  addPolygons(fillColor = "blue", color = "black", weight = 1, opacity = 1)
-
-
-pal <- colorNumeric("viridis", domain = Belem_shape$TOT_GERAL)
-
-leaflet(Belem_shape) %>%
-  addTiles() %>%
-  addPolygons(fillColor = ~pal(TOT_GERAL), 
-              color = "black", 
-              weight = 1, 
-              opacity = 1,
-              fillOpacity = 0.7,
-              popup = ~paste("Valor:", TOT_GERAL)) %>%
-  addLegend(pal = pal, values = Belem_shape$TOT_GERAL, title = "TOT_GERAL")
-
-
-
-leaflet(Belem_shape) %>%
-  addTiles() %>%
-  addHeatmap(lng = ~st_coordinates(Belem_shape)[,1], 
-             lat = ~st_coordinates(Belem_shape)[,2], 
-             intensity = ~TOT_GERAL, 
-             blur = 20, max = 0.05, radius = 15) %>%
-  addLegend(pal = colorNumeric("viridis", domain = Belem_shape$TOT_GERAL), 
-            values = Belem_shape$TOT_GERAL, 
-            title = "TOT_GERAL")
+  addProviderTiles(providers$Esri.NatGeoWorldMap) %>%
+  addPolygons(
+    color = ~pal(TOT_GERAL),      # cor da borda baseada no valor
+    weight = 4,                   # espessura da linha
+    fillColor = ~pal(TOT_GERAL),  # cor de preenchimento baseada no valor
+    fillOpacity = 1,              # opacidade do preenchimento
+    popup = ~paste("Vitimas:", TOT_GERAL), # mostrar valor ao clicar
+    highlightOptions = highlightOptions(
+      color = "blue",       # cor ao passar o mouse
+      weight = 5,           # espessura ao passar o mouse
+      bringToFront = TRUE   # traz pra frente quando focado
+    )  
+    ) %>%
+  addLegend("bottomright", 
+            pal = pal, 
+            values = ~TOT_GERAL,
+            title = "Sinistros", 
+            opacity = 1) %>%
+  setView(lng = median(coords[,1]), 
+          lat = median(coords[,2]), 
+          zoom = 11)
+#------------------------------------------------------------------------------#
 
 
 
-leaflet(Belem_top) %>%
-  addTiles() %>%
-  addHeatmap(lng = ~st_coordinates(Belem_top)[,1], 
-             lat = ~st_coordinates(Belem_top)[,2], 
-             intensity = ~TOT_GERAL, 
-             blur = 20, max = 0.05, radius = 15) %>%
-  addLegend(pal = colorNumeric("viridis", domain = Belem_top$TOT_GERAL), 
-            values = Belem_top$TOT_GERAL, 
-            title = "TOT_GERAL (Maiores Valores)")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#------------------------------------------------------------------------------#
+# Heatmap
+leaflet(belem_centroids) %>%
+  addProviderTiles(providers$OpenStreetMap) %>%
+  setView(lng = -48.4891, 
+          lat = -1.4558, zoom = 14)  %>% # Ex: centro de Belém
+  addHeatmap(
+    lng = coords[,1],
+    lat = coords[,2],
+    intensity = belem_centroids$TOT_RES,
+    blur = 15,
+    radius = 12,
+    max = max(belem_centroids$TOT_RES, na.rm = TRUE)
+  )
+#------------------------------------------------------------------------------#
+leaflet(belem_centroids, options = leafletOptions(maxZoom = 18)) %>%
+  addProviderTiles(providers$OpenStreetMap) %>%
+  fitBounds(
+    lng1 = min(coords[,1]), lng2 = max(coords[,1]),
+    lat1 = min(coords[,2]), lat2 = max(coords[,2])
+  ) %>%
+  addHeatmap(
+    lng = coords[,1],
+    lat = coords[,2],
+    intensity = belem_centroids$TOT_RES,
+    blur = 15,
+    radius = 10,
+    max = max(belem_centroids$TOT_RES, na.rm = TRUE)
+  )
+#------------------------------------------------------------------------------#
+
+
+
+
+
+
+
+
+
+#------------------------------------------------------------------------------#
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
